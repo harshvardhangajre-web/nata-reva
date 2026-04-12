@@ -38,11 +38,13 @@ export default function TestPage() {
 
   const score = answers.filter((a, i) => a === questions[i].answer).length;
 
-  const weakTopics = [...new Set(
+  const weakTopics = Array.from(
+  new Set(
     questions
       .filter((q, i) => answers[i] !== q.answer)
       .map((q) => q.topic)
-  )];
+  )
+);
 
   async function submitTest() {
     if (!user || saving) return;
