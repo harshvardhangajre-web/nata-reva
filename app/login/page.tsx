@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase";
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -21,7 +21,13 @@ export default function LoginPage() {
     setError("");
     setMessage("");
 
-    if (mode === "signup") {
+    if (mode === "forgot") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/update-password`,
+      });
+      if (error) setError(error.message);
+      else setMessage("Password reset email sent! Please check your inbox.");
+    } else if (mode === "signup") {
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -102,12 +108,21 @@ export default function LoginPage() {
                 key={m}
                 onClick={() => { setMode(m); setError(""); setMessage(""); }}
                 className="flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 capitalize"
-                style={mode === m ? { background: "white", color: "#0D0D0D", boxShadow: "0 1px 8px rgba(0,0,0,0.08)" } : { color: "#8A8A8A" }}
+                style={(mode === m || (mode === "forgot" && m === "login")) ? { background: "white", color: "#0D0D0D", boxShadow: "0 1px 8px rgba(0,0,0,0.08)" } : { color: "#8A8A8A" }}
               >
                 {m === "login" ? "Sign In" : "Sign Up"}
               </button>
             ))}
           </div>
+
+          {mode === "forgot" && (
+            <div className="mb-6 mb-6">
+              <button onClick={() => setMode("login")} className="text-sm font-medium transition-colors mb-2 text-ink-400 hover:text-ink-900 flex items-center gap-1">
+                ← Back to Login
+              </button>
+              <p className="text-sm font-body text-ink-600">Enter your email address and we will send you a link to reset your password.</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "signup" && (
@@ -134,18 +149,27 @@ export default function LoginPage() {
                 required
               />
             </div>
-            <div>
-              <label className="label">Password</label>
-              <input
-                type="password"
-                className="input-field"
-                placeholder={mode === "signup" ? "Min 6 characters" : "Your password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </div>
+            {mode !== "forgot" && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="label mb-0">Password</label>
+                  {mode === "login" && (
+                    <button type="button" onClick={() => { setMode("forgot"); setError(""); setMessage(""); }} className="text-xs font-medium focus:outline-none" style={{ color: "#E8A940" }}>
+                      Forgot Password?
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  className="input-field"
+                  placeholder={mode === "signup" ? "Min 6 characters" : "Your password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+            )}
 
             {error && (
               <div className="p-3 rounded-lg text-sm" style={{ background: "rgba(224,112,96,0.08)", color: "#C4503A", border: "1px solid rgba(224,112,96,0.2)" }}>
@@ -167,7 +191,7 @@ export default function LoginPage() {
                   </svg>
                   Processing…
                 </span>
-              ) : mode === "login" ? "Sign In" : "Create Account"}
+              ) : mode === "forgot" ? "Send Reset Email" : mode === "login" ? "Sign In" : "Create Account"}
             </button>
           </form>
 
