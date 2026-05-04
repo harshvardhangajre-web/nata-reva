@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
@@ -8,6 +8,18 @@ export default function UpdatePasswordPage() {
     const router = useRouter();
     const supabase = createClient();
     const [password, setPassword] = useState("");
+
+    useEffect(() => {
+        const checkSession = async () => {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get("code");
+            if (code) {
+                const { error } = await supabase.auth.exchangeCodeForSession(code);
+                if (error) setError("Reset link expired or invalid.");
+            }
+        };
+        checkSession();
+    }, [supabase]);
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
