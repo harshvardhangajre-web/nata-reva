@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-async function callGroq(prompt: string): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+async function callOpenRouter(prompt: string): Promise<string> {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
+      model: "meta-llama/llama-3.3-70b-instruct",
       messages: [{ role: "user", content: prompt }],
       max_tokens: 600,
       temperature: 0.8,
@@ -16,9 +16,9 @@ async function callGroq(prompt: string): Promise<string> {
   });
 
   const data = await res.json();
-  console.log("GROQ RESPONSE:", JSON.stringify(data, null, 2));
+  console.log("OpenRouter RESPONSE:", JSON.stringify(data, null, 2));
 
-  if (!res.ok || data.error) throw new Error(data.error?.message || "Groq failed");
+  if (!res.ok || data.error) throw new Error(data.error?.message || "OpenRouter failed");
   return data.choices?.[0]?.message?.content || "";
 }
 
@@ -43,10 +43,10 @@ Be specific, practical, and encouraging. Keep it concise.`;
     let text = "";
 
     try {
-      text = await callGroq(prompt);
-      console.log("Used: Groq ✓");
+      text = await callOpenRouter(prompt);
+      console.log("Used: OpenRouter ✓");
     } catch (e) {
-      console.log("Groq failed:", e);
+      console.log("OpenRouter failed:", e);
     }
 
     if (chatMode) {
