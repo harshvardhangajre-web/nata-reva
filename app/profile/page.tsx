@@ -21,11 +21,11 @@ export default function ProfilePage() {
                 router.push("/login");
                 return;
             }
-
+            const authEmail = authUser.email || "";
             setUser({
                 id: authUser.id,
-                email: authUser.email!,
-                name: authUser.user_metadata?.full_name || authUser.email!.split("@")[0],
+                email: authEmail,
+                name: authUser.user_metadata?.full_name || (authEmail ? authEmail.split("@")[0] : "Student"),
             });
 
             // Fetch existing profile
@@ -37,6 +37,9 @@ export default function ProfilePage() {
 
             if (profile?.phone_number) {
                 setPhoneNumber(profile.phone_number);
+            } else if (authUser.phone) {
+                // If they logged in via OTP, set it directly
+                setPhoneNumber(authUser.phone.startsWith("+") ? authUser.phone : `+${authUser.phone}`);
             }
             setLoading(false);
         }
@@ -99,12 +102,16 @@ export default function ProfilePage() {
                                         Email Address
                                     </label>
                                     <input
-                                        type="email"
-                                        value={user?.email || ""}
+                                        type="text"
+                                        value={user?.email || "Phone Login (No Email)"}
                                         disabled
                                         className="w-full px-4 py-2.5 rounded-xl border border-ink-200 bg-ink-50 text-ink-500 font-body text-sm cursor-not-allowed"
                                     />
-                                    <p className="text-xs text-ink-400 mt-1.5">Your email address cannot be changed here.</p>
+                                    {user?.email ? (
+                                        <p className="text-xs text-ink-400 mt-1.5">Your email address cannot be changed here.</p>
+                                    ) : (
+                                        <p className="text-xs text-ink-400 mt-1.5">You logged in using a Phone Number.</p>
+                                    )}
                                 </div>
 
                                 {/* Phone Number */}
@@ -134,8 +141,8 @@ export default function ProfilePage() {
                             {message && (
                                 <div
                                     className={`px-4 py-3 rounded-lg text-sm font-medium ${message.type === "success"
-                                            ? "bg-[#6B8F71]/10 text-[#6B8F71] border border-[#6B8F71]/20"
-                                            : "bg-[#E07060]/10 text-[#E07060] border border-[#E07060]/20"
+                                        ? "bg-[#6B8F71]/10 text-[#6B8F71] border border-[#6B8F71]/20"
+                                        : "bg-[#E07060]/10 text-[#E07060] border border-[#E07060]/20"
                                         }`}
                                 >
                                     {message.text}
