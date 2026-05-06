@@ -8,7 +8,11 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
+  const [authMethod, setAuthMethod] = useState<"email" | "phone">("email");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,24 +25,40 @@ export default function LoginPage() {
     setError("");
     setMessage("");
 
-    if (mode === "forgot") {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/update-password`,
-      });
-      if (error) setError(error.message);
-      else setMessage("Password reset email sent! Please check your inbox.");
-    } else if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: name } },
-      });
-      if (error) setError(error.message);
-      else setMessage("Account created! Please check your email to confirm, then log in.");
+    if (authMethod === "phone") {
+      if (!otpSent) {
+        // Assume Indian prefix if not provided for convenience
+        const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+        const { error } = await supabase.auth.signInWithOtp({ phone: formattedPhone });
+        if (error) setError(error.message);
+        else { setOtpSent(true); setMessage("Code sent successfully! Please enter it below."); }
+      } else {
+        const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+        const { error } = await supabase.auth.verifyOtp({ phone: formattedPhone, token: otp, type: "sms" });
+        if (error) setError(error.message);
+        else router.push("/dashboard");
+      }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
-      else router.push("/dashboard");
+      // Email Auth logic
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/update-password`,
+        });
+        if (error) setError(error.message);
+        else setMessage("Password reset email sent! Please check your inbox.");
+      } else if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: name } },
+        });
+        if (error) setError(error.message);
+        else setMessage("Account created! Please check your email to confirm, then log in.");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) setError(error.message);
+        else router.push("/dashboard");
+      }
     }
     setLoading(false);
   }
@@ -94,28 +114,39 @@ export default function LoginPage() {
 
           <div className="mb-8">
             <h2 className="font-display text-3xl font-semibold text-ink-900 mb-2">
-              {mode === "login" ? "Welcome back" : "Create account"}
+              {authMethod === "phone" ? "Enter your phone" : mode === "login" ? "Welcome back" : "Create account"}
             </h2>
             <p className="text-ink-400 font-body">
-              {mode === "login" ? "Sign in to continue your preparation" : "Start your NATA journey today"}
+              {authMethod === "phone" ? "Sign in instantly via SMS code" : mode === "login" ? "Sign in to continue your preparation" : "Start your NATA journey today"}
             </p>
           </div>
 
-          {/* Toggle */}
-          <div className="flex p-1 rounded-xl mb-8" style={{ background: "#F0EFEC" }}>
-            {(["login", "signup"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => { setMode(m); setError(""); setMessage(""); }}
-                className="flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 capitalize"
-                style={(mode === m || (mode === "forgot" && m === "login")) ? { background: "white", color: "#0D0D0D", boxShadow: "0 1px 8px rgba(0,0,0,0.08)" } : { color: "#8A8A8A" }}
-              >
-                {m === "login" ? "Sign In" : "Sign Up"}
-              </button>
-            ))}
+          <div className="flex gap-6 mb-6 border-b border-ink-100">
+            <button type="button" onClick={() => { setAuthMethod("email"); setError(""); setMessage(""); }} className={`py-2 text-sm font-medium transition-colors border-b-2 ${authMethod === "email" ? "text-ink-900 border-[#E8A940]" : "text-ink-400 border-transparent hover:text-ink-600"}`}>
+              Email
+            </button>
+            <button type="button" onClick={() => { setAuthMethod("phone"); setError(""); setMessage(""); setOtpSent(false); }} className={`py-2 text-sm font-medium transition-colors border-b-2 ${authMethod === "phone" ? "text-ink-900 border-[#E8A940]" : "text-ink-400 border-transparent hover:text-ink-600"}`}>
+              Phone Number
+            </button>
           </div>
 
-          {mode === "forgot" && (
+          {/* Toggle */}
+          {authMethod === "email" && (
+            <div className="flex p-1 rounded-xl mb-8" style={{ background: "#F0EFEC" }}>
+              {(["login", "signup"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => { setMode(m); setError(""); setMessage(""); }}
+                  className="flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 capitalize"
+                  style={(mode === m || (mode === "forgot" && m === "login")) ? { background: "white", color: "#0D0D0D", boxShadow: "0 1px 8px rgba(0,0,0,0.08)" } : { color: "#8A8A8A" }}
+                >
+                  {m === "login" ? "Sign In" : "Sign Up"}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {authMethod === "email" && mode === "forgot" && (
             <div className="mb-6 mb-6">
               <button onClick={() => setMode("login")} className="text-sm font-medium transition-colors mb-2 text-ink-400 hover:text-ink-900 flex items-center gap-1">
                 ← Back to Login
@@ -125,50 +156,46 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === "signup" && (
-              <div>
-                <label className="label">Full Name</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="Arjun Sharma"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
-            )}
-            <div>
-              <label className="label">Email Address</label>
-              <input
-                type="email"
-                className="input-field"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            {mode !== "forgot" && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="label mb-0">Password</label>
-                  {mode === "login" && (
-                    <button type="button" onClick={() => { setMode("forgot"); setError(""); setMessage(""); }} className="text-xs font-medium focus:outline-none" style={{ color: "#E8A940" }}>
-                      Forgot Password?
-                    </button>
-                  )}
+            {authMethod === "email" ? (
+              <>
+                {mode === "signup" && (
+                  <div>
+                    <label className="label">Full Name</label>
+                    <input type="text" className="input-field" placeholder="Arjun Sharma" value={name} onChange={(e) => setName(e.target.value)} required />
+                  </div>
+                )}
+                <div>
+                  <label className="label">Email Address</label>
+                  <input type="email" className="input-field" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
                 </div>
-                <input
-                  type="password"
-                  className="input-field"
-                  placeholder={mode === "signup" ? "Min 6 characters" : "Your password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                />
-              </div>
+                {mode !== "forgot" && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="label mb-0">Password</label>
+                      {mode === "login" && (
+                        <button type="button" onClick={() => { setMode("forgot"); setError(""); setMessage(""); }} className="text-xs font-medium focus:outline-none" style={{ color: "#E8A940" }}>
+                          Forgot Password?
+                        </button>
+                      )}
+                    </div>
+                    <input type="password" className="input-field" placeholder={mode === "signup" ? "Min 6 characters" : "Your password"} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="label">Mobile Number</label>
+                  <input type="tel" disabled={otpSent} className="input-field" placeholder="7899526003" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+                  <p className="text-xs text-ink-400 mt-1">We'll automatically add +91 for you, or enter your full country code.</p>
+                </div>
+                {otpSent && (
+                  <div className="animate-fade-up">
+                    <label className="label">6-Digit Code</label>
+                    <input type="text" className="input-field font-mono tracking-widest text-lg text-center" placeholder="•• •• ••" value={otp} onChange={(e) => setOtp(e.target.value)} required maxLength={6} style={{ letterSpacing: "0.2em" }} />
+                  </div>
+                )}
+              </>
             )}
 
             {error && (
@@ -191,7 +218,7 @@ export default function LoginPage() {
                   </svg>
                   Processing…
                 </span>
-              ) : mode === "forgot" ? "Send Reset Email" : mode === "login" ? "Sign In" : "Create Account"}
+              ) : authMethod === "phone" ? (otpSent ? "Verify Code" : "Send SMS") : mode === "forgot" ? "Send Reset Email" : mode === "login" ? "Sign In" : "Create Account"}
             </button>
           </form>
 
