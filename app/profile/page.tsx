@@ -8,8 +8,9 @@ import Sidebar from "@/components/Sidebar";
 export default function ProfilePage() {
     const router = useRouter();
     const supabase = createClient();
-    const [user, setUser] = useState<{ id: string; email: string; name: string } | null>(null);
+    const [user, setUser] = useState<{ id: string; name: string } | null>(null);
     const [phoneNumber, setPhoneNumber] = useState("");
+    const [fullName, setFullName] = useState("");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -21,15 +22,17 @@ export default function ProfilePage() {
                 router.push("/login");
                 return;
             }
-            const authEmail = authUser.email || "";
+
+            const currentName = authUser.user_metadata?.full_name || "Student";
+
             setUser({
                 id: authUser.id,
-                email: authEmail,
-                name: authUser.user_metadata?.full_name || (authEmail ? authEmail.split("@")[0] : "Student"),
+                name: currentName,
             });
+            setFullName(currentName);
 
             // Fetch existing profile
-            const { data: profile, error } = await supabase
+            const { data: profile } = await supabase
                 .from("profiles")
                 .select("phone_number")
                 .eq("id", authUser.id)
@@ -38,7 +41,7 @@ export default function ProfilePage() {
             if (profile?.phone_number) {
                 setPhoneNumber(profile.phone_number);
             } else if (authUser.phone) {
-                // If they logged in via OTP, set it directly
+                // If they logged in via OTP, prefill directly from the auth instance
                 setPhoneNumber(authUser.phone.startsWith("+") ? authUser.phone : `+${authUser.phone}`);
             }
             setLoading(false);
@@ -53,17 +56,32 @@ export default function ProfilePage() {
         setSaving(true);
         setMessage(null);
 
-        const { error } = await supabase.from("profiles").upsert({
+        // Update the auth user's metadata in Supabase (Auth layer)
+        const { error: authError } = await supabase.auth.updateUser({
+            data: { full_name: fullName }
+        });
+
+        if (authError) {
+            setSaving(false);
+            console.error(authError);
+            setMessage({ text: "Failed to save profile. Please try again.", type: "error" });
+            return;
+        }
+
+        // Upsert the phone number to the public profiles table
+        const { error: dbError } = await supabase.from("profiles").upsert({
             id: user.id,
             phone_number: phoneNumber,
         });
 
         setSaving(false);
 
-        if (error) {
-            console.error(error);
-            setMessage({ text: "Failed to save profile. Please try again.", type: "error" });
+        if (dbError) {
+            console.error(dbError);
+            setMessage({ text: "Failed to save phone number. Please try again.", type: "error" });
         } else {
+            // Update the UI locally without needing a refresh
+            setUser({ ...user, name: fullName });
             setMessage({ text: "Profile updated successfully!", type: "success" });
             setTimeout(() => setMessage(null), 3000);
         }
@@ -92,26 +110,25 @@ export default function ProfilePage() {
                     </div>
 
                     {/* Profile Form Card */}
-                    <div className="card p-8 animate-fade-up stagger-1" style={{ opacity: 0 }}>
+                    <div className="card p-8 animate-fade-up stagger-1" style={{ opacity: 0, animationFillMode: "forwards" }}>
                         <form onSubmit={handleSave} className="space-y-6">
 
                             <div className="space-y-4">
-                                {/* Email (Read-only) */}
+
+                                {/* Full display Name */}
                                 <div>
-                                    <label className="block text-sm font-medium text-ink-900 mb-1.5">
-                                        Email Address
+                                    <label className="block text-sm font-medium text-ink-900 mb-1.5" htmlFor="fullName">
+                                        Full Name
                                     </label>
                                     <input
+                                        id="fullName"
                                         type="text"
-                                        value={user?.email || "Phone Login (No Email)"}
-                                        disabled
-                                        className="w-full px-4 py-2.5 rounded-xl border border-ink-200 bg-ink-50 text-ink-500 font-body text-sm cursor-not-allowed"
+                                        placeholder="Arjun Sharma"
+                                        value={fullName}
+                                        onChange={(e) => setFullName(e.target.value)}
+                                        className="w-full px-4 py-2.5 rounded-xl border border-ink-200 bg-white text-ink-900 font-body text-sm focus:outline-none focus:ring-2 focus:ring-[#E8A940]/50 focus:border-[#E8A940] transition-shadow"
                                     />
-                                    {user?.email ? (
-                                        <p className="text-xs text-ink-400 mt-1.5">Your email address cannot be changed here.</p>
-                                    ) : (
-                                        <p className="text-xs text-ink-400 mt-1.5">You logged in using a Phone Number.</p>
-                                    )}
+                                    <p className="text-xs text-ink-400 mt-1.5">This name will be displayed in your sidebar.</p>
                                 </div>
 
                                 {/* Phone Number */}
@@ -134,6 +151,7 @@ export default function ProfilePage() {
                                             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-ink-200 bg-white text-ink-900 font-body text-sm focus:outline-none focus:ring-2 focus:ring-[#E8A940]/50 focus:border-[#E8A940] transition-shadow"
                                         />
                                     </div>
+                                    <p className="text-xs text-ink-400 mt-1.5">This helps tutors contact you directly.</p>
                                 </div>
                             </div>
 
@@ -154,7 +172,7 @@ export default function ProfilePage() {
                                 <button
                                     type="submit"
                                     disabled={saving}
-                                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-sm font-medium text-white transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-sm font-medium text-white transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:bg-opacity-90"
                                     style={{ background: "#E8A940" }}
                                 >
                                     {saving && (
